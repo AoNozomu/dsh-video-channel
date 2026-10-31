@@ -22,7 +22,7 @@ import { runLongform, locateInScan } from './longform.js';
 import { probeSpec, storyboardSpec, zoomSpec, readSpec, scanSpec, whereSpec,
   PROBE_TOOL, STORYBOARD_TOOL, ZOOM_TOOL, READ_TOOL, SCAN_TOOL, WHERE_TOOL } from './tools.js';
 
-export const name = 'dsh-video-vision';
+export const name = 'dsh-video-channel';   // 曾用名 dsh-video-vision（fork 自它）
 export const inject = ['tools', 'attachments'];
 
 /** The model never sees a broken tool: every failure becomes a message. */

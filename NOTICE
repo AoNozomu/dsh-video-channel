@@ -1,3 +1,26 @@
+
+dsh-video-channel
+=================
+
+This project is a fork of dsh-video-vision
+(https://github.com/Destinhue/dsh-video-vision), which is MIT licensed.
+The upstream work — frame extraction, cut detection, storyboard compositing, zoom,
+video probing, text reading — is theirs and is reused here unchanged except for the
+two files listed in patches/DIFF.md.
+
+What was added on top:
+
+  · src/longform.js      a whole-episode channel: dedupe pictures by frame change,
+                         OCR every second of burned-in subtitles, emit [second] lines
+  · video_scan           exposes that channel as a tool
+  · video_where          maps a subtitle line back to a storyboard cell, so a face can
+                         be looked at with video_zoom instead of guessed from a small cell
+
+Why the package was renamed: keeping the upstream name would mean anyone who installed
+this fork stops receiving upstream updates (same package name, one overwrites the other).
+Under its own name this can sit next to dsh-video-vision, or replace it — it is a superset.
+
+--- upstream NOTICE follows ---
 dsh-video-vision
 Copyright (c) 2026 the dsh-video-vision authors
 

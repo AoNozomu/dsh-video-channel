@@ -2,13 +2,26 @@
 
 **Read a whole episode — not a handful of frames.**
 
-A long-form video channel for [DeepSeek Harness](https://github.com/). It splits a video into two
-independent streams — **pictures, deduplicated** and **dialogue, every single second of it** —
-then joins them back together with timecodes.
+A long-form video channel for [DeepSeek Harness](https://github.com/).
 
-Built on top of [`dsh-video-vision`](https://github.com/). Ships as a DSH plugin: install it and you
-get two new tools (`video_scan`, `video_where`) beside the existing `video_probe` /
-`video_storyboard` / `video_zoom` / `video_read`.
+> **This is a fork of [`dsh-video-vision`](https://github.com/Destinhue/dsh-video-vision).**
+> The upstream work — frame extraction, cut detection, storyboard compositing, on-demand zoom,
+> video probing, text reading — is theirs, MIT licensed, and reused here unchanged except for the
+> two files listed in [docs/00-改动说明.md](docs/00-改动说明.md).
+>
+> What this fork adds: a **whole-episode channel**. Upstream's storyboard answers "look at these
+> 30 seconds" very well; it does not answer "watch this 26-minute episode", because it returns one
+> sheet per call (≤28 cells) and only samples at shot cuts — dialogue inside a long take is lost.
+>
+> **Renamed on purpose.** Keeping the name `dsh-video-vision` would mean that anyone who installs
+> this fork stops receiving upstream updates (same package name, one silently overwrites the other).
+> Under its own name it installs beside upstream, or replaces it — it is a superset, all six tools
+> are present. Please keep using upstream for the original five.
+
+It splits a video into two independent streams — **pictures, deduplicated** and **dialogue, every
+single second of it** — then joins them back together with timecodes. Install it and you get two
+new tools (`video_scan`, `video_where`) beside the existing `video_probe` / `video_storyboard` /
+`video_zoom` / `video_read`.
 
 ---
 
