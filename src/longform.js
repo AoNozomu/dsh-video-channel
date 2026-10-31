@@ -110,7 +110,11 @@ export function mergeSubtitleLines(raw, maxGapSec = 3, threshold = 0.55) {
   const groups = [];
   for (const item of raw) {
     const text = clean(item.text);
-    if (text.length < 2) continue;
+    // 2026-10-31 修：原来是 `if (text.length < 2) continue`，把**单字台词全丢了** ——
+    //   「嗯」「哦」「喂」「走」「滚」这种在动画里极常见，尤其打斗场景。
+    //   第一集 418 格底下明明有个「嗯」，成品台词里一条都没有。
+    //   现在只丢空字符串；单字留着，宁可多一条也别漏。
+    if (!text) continue;
     const last = groups[groups.length - 1];
     if (last && item.t - last[last.length - 1].t <= maxGapSec
       && similar(text, last[last.length - 1].text)) {
