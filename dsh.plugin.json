@@ -1,0 +1,12 @@
+{
+  "name": "dsh-video-vision",
+  "description": "Video understanding for DeepSeek Harness: adaptive storyboard grids, on-demand zoom, text reading, plus a long-form channel that scans a whole episode into per-second OCR subtitle lines and per-cell timecoded storyboards.",
+  "version": "1.4.0",
+  "entry": {
+    "name": "dsh-video-vision",
+    "inject": [
+      "tools",
+      "attachments"
+    ]
+  }
+}

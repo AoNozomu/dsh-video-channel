@@ -1,0 +1,14 @@
+﻿# 依赖
+node_modules/
+# 扫描产物
+out/
+*.scan/
+# 本机的 ffmpeg（77MB，各自下载）
+vendor/bin/*.exe
+# 日志、临时
+*.log
+.DS_Store
+*.bak*
+*.bak-*
+# 上游测试素材（视频样本，体积大，各自生成）
+bench/corpus/
