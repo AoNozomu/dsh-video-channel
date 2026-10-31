@@ -5,7 +5,7 @@
  * 爸爸定的口径（2026-10-31）：
  *   画面可以省，台词一句都不能少 —— 所以两者分开处理：
  *     · 画面：相邻帧差异小的丢弃（同一张脸不会刷 N 遍），拼成带格号的分镜图；
- *     · 台词：抽出来的整帧交给 RapidOCR（E:\ocr-env）逐帧识别，只取底部字幕区，
+ *     · 台词：抽出来的整帧交给 RapidOCR（装了 rapidocr 的 python）逐帧识别，只取底部字幕区，
  *             按时间码输出，相邻重复合并。
  *
  * 为什么用 RapidOCR 而不是 Windows 自带 OCR（2026-10-31 实测）：
@@ -16,7 +16,7 @@
  * 用法：
  *   node bin/scan-video.mjs <视频文件> [--start 0] [--end 780] [--step 1]
  *                            [--per-sheet 16] [--cols 4] [--width 480]
- *                            [--ocr-python E:\ocr-env\Scripts\python.exe]
+ *                            [--ocr-python /path/to/ocr-env/python]
  *                            [--no-subtitle] [--out <目录>]
  *
  * 输出：<out>/sheet-001.png ...（画面）+ <out>/subtitles.txt（带 [秒] 的台词）+ <out>/index.json
@@ -34,7 +34,7 @@ import { findFfmpeg, findFfprobe, run, parseFfmpegBanner } from '../src/media.js
 
 const HOME = process.env.DSH_HOME || path.join(os.homedir(), '.dsh');
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_OCR_PY = process.env.DSH_OCR_PYTHON || 'E:\\ocr-env\\Scripts\\python.exe';
+const DEFAULT_OCR_PY = process.env.DSH_OCR_PYTHON || '';   // 各自设环境变量，不写死机器路径
 
 function parseArgs(argv) {
   const out = {

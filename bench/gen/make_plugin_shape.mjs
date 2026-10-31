@@ -5,8 +5,9 @@ import { execFileSync } from "node:child_process";
 import { writeFileSync, statSync, mkdirSync } from "node:fs";
 import path from "node:path";
 
-const BENCH = "F:\\ai\\v4video\\bench";
-const FFMPEG = "F:\\ai\\v4video\\vendor\\bin\\ffmpeg.exe";
+const HERE = dirname(fileURLToPath(import.meta.url));
+const BENCH = process.env.BENCH_DIR || join(HERE, "..", "corpus");
+const FFMPEG = process.env.DSH_FFMPEG_PATH || "ffmpeg";
 const out = path.join(BENCH, "out", "plugin_shape.json");
 const sheet = path.join(BENCH, "out", "sheet_A.png");
 mkdirSync(path.join(BENCH, "out"), { recursive: true });

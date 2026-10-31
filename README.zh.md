@@ -253,7 +253,7 @@ small 484 MB、medium 1.5 GB）。同一段两分钟的真实课堂录音、16 �
 
   ```json
   {
-    "cmd": "C:\\python\\python.exe F:\\asr\\engine.py --model small {wav} {out}",
+    "cmd": "python /path/to/asr/engine.py --model small {wav} {out}",
     "terms": { "地规": "递推", "階層": "阶乘" }
   }
   ```
