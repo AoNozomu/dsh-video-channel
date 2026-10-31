@@ -77,6 +77,54 @@ tells you nothing about the dialogue.
 
 ---
 
+## Cost — read this before you scan anything
+
+The scan itself is free (ffmpeg + local OCR). **The cost is what you feed back to the model.**
+Measured on a 27-minute episode (1640 s → 45 sheets, 416 subtitle lines):
+
+| what you read | tokens | ≈ USD |
+|---|---|---|
+| `subtitles.txt` only | ~4.4K | **0.009** |
+| subtitles + 3 sheets | ~7.7K | 0.015 |
+| subtitles + 12 sheets | ~17.6K | 0.035 |
+| **subtitles + all 45 sheets** | **~54K** | **0.108** |
+
+**Reading all 45 costs 12× more and buys you almost nothing** — the plot lives in the
+transcript; the pictures only answer "what does this moment look like".
+
+So the intended reading order is:
+
+```
+1. subtitles.txt          ← the plot. Always read this first.
+2. index.json             ← the timeline: which sheet covers which seconds. Text, near-free.
+3. 1-3 sheets             ← only for what words cannot show.
+4. video_zoom on one s    ← when you need to see an actual face.
+```
+
+⚠️ **The CLI does not enforce any of this.** `scan-video.mjs` prints
+`{ok, outDir, sheets: 45}` and stops — the images are files on disk, and nothing counts
+how many you open. If you are wiring this into an agent, **put a hard cap in its system
+prompt** (we use 3–5 sheets per scan). A tool cannot decide how much context you can afford.
+
+---
+
+## Don't block your agent for 20 minutes
+
+A full episode takes 10–20 minutes to scan (OCR is ~0.37 s/frame). If you run that
+**blocking**, your agent cannot answer anything while it runs — every incoming message
+queues up. We learned this the hard way: a 26-minute episode run in the foreground froze
+an agent for 25 minutes and piled up 28 queued messages, which then cost far more than
+the scan itself when it woke up and re-read everything.
+
+```
+scan in the background  →  keep chatting  →  job_output when it is done
+```
+
+Rule of thumb: **if you are not sure how long it takes, run it in the background.**
+Full write-up (including the "queued messages" trap): [docs/04-踩过的坑.md](docs/04-踩过的坑.md), pitfall 14.
+
+---
+
 ## The rule that matters most
 
 > **Never identify a character from a storyboard cell.**
