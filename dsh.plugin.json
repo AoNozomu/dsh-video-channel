@@ -3,7 +3,7 @@
   "description": "Long-form video understanding for DeepSeek Harness — a fork of dsh-video-vision that adds a whole-episode channel: dedupe pictures by change, OCR subtitles every second, locate any line back to a storyboard cell. Drop-in replacement for dsh-video-vision.",
   "version": "1.4.0",
   "entry": {
-    "name": "dsh-video-vision",
+    "name": "dsh-video-channel",
     "inject": [
       "tools",
       "attachments"

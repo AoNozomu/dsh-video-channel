@@ -18,6 +18,40 @@ A long-form video channel for [DeepSeek Harness](https://github.com/).
 > Under its own name it installs beside upstream, or replaces it — it is a superset, all six tools
 > are present. Please keep using upstream for the original five.
 
+> ### ⚠️ Install RapidOCR, or the OCR is close to useless
+>
+> **This is the one step people skip, and skipping it is silent.** Without a RapidOCR python the
+> tool falls back to `Windows.Media.Ocr` and still returns "successful" results — the text is just
+> wrong. Measured on the same 8 frames of a Chinese-subtitled episode:
+>
+> | the frame says | Windows.Media.Ocr returns | RapidOCR returns |
+> | --- | --- | --- |
+> | `4K修复播放室` | `4K 修 复 播 放 室 LiliLi\i` | `4K修复播放室` |
+> | `bilibili` | `LiliLili` / `VliLi\i` / `LiIiLiIi` / `LiliLiIi` (4 different wrong readings in 8 frames) | `bilibili`, all 8 |
+> | `迈克·庞德史密斯` | `迈 克 到 庞 德 史 密 斯` | `迈克·庞德史密斯` |
+> | small on-screen text | `0 噁 0 嶺` | `SAYA ELDER`, `BAR` |
+>
+> Windows OCR also puts **a space between every CJK character**, which breaks any downstream
+> substring matching. So: no RapidOCR ⇒ subtitles and slide text come back garbled, and the model
+> reading them gets a wrong idea of the video. It does not error, it just lies quietly.
+>
+> ```bash
+> # Windows
+> python -m venv E:\ocr-env
+> E:\ocr-env\Scripts\pip install rapidocr-onnxruntime
+> setx DSH_OCR_PYTHON E:\ocr-env\Scripts\python.exe
+>
+> # Linux / macOS
+> python3 -m venv ~/ocr-env
+> ~/ocr-env/bin/pip install rapidocr-onnxruntime
+> export DSH_OCR_PYTHON=~/ocr-env/bin/python
+> ```
+>
+> `DSH_OCR_PYTHON` is not the only way — `src/ocr-python.js` also looks in `vendor/ocr-env`, a
+> sibling `ocr-env`, `%LOCALAPPDATA%`, `%USERPROFILE%` and `<drive>:\ocr-env`. But an explicit
+> variable is what `bin/selfcheck.mjs` can verify, and **selfcheck fails when the engine is the
+> fallback one** — run it after installing and it will tell you which engine you actually got.
+
 It splits a video into two independent streams — **pictures, deduplicated** and **dialogue, every
 single second of it** — then joins them back together with timecodes. Install it and you get two
 new tools (`video_scan`, `video_where`) beside the existing `video_probe` / `video_storyboard` /

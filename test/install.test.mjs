@@ -7,7 +7,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = realpathSync(fileURLToPath(new URL('..', import.meta.url)));
-const PKG = 'dsh-video-vision';
+// 2026-11-01: the fork renamed the package; install.mjs writes this name
+// into the profile, so the assertion has to use the same one.
+const PKG = 'dsh-video-channel';
 
 /** A throwaway DSH_HOME with one profile, so the real one is never touched. */
 function sandbox() {
@@ -51,8 +53,8 @@ test('install mounts the package and the bundle entry, and is idempotent', () =>
   const { home, profile } = sandbox();
   try {
     const first = install(home);
-    assert.match(first, /dependencies\["dsh-video-vision"\] = link:/);
-    assert.match(first, /bundles \+= dsh-video-vision/);
+    assert.match(first, /dependencies\["dsh-video-channel"\] = link:/);
+    assert.match(first, /bundles \+= dsh-video-channel/);
 
     const pkg = readPkg(profile);
     assert.equal(pkg.dependencies[PKG], `link:${ROOT.replace(/\\/g, '/')}`);

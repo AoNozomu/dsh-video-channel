@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Install dsh-video-vision into a DeepSeek Harness profile.
+ * Install dsh-video-channel into a DeepSeek Harness profile.
  *
  * A DSH profile is three things: a `package.json` with the dependency, an entry
  * in `dsh.profile.bundles`, and the package present under `node_modules/`. The
@@ -25,7 +25,10 @@ import { dirname, join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const PKG = 'dsh-video-vision';
+// 2026-11-01: 这里原来写的是上游的包名 'dsh-video-vision'（fork 改名时漏了）。
+// 后果很具体：装的时候会往 profile 的 dependencies / bundles 里写上游的名字，
+// 和真正的上游撞在一起 —— 两个包静默互相覆盖。
+const PKG = 'dsh-video-channel';
 const PLUGIN_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const argv = process.argv.slice(2);

@@ -1,4 +1,4 @@
-# dsh-video-vision
+# dsh-video-channel
 
 让模型**看**视频，而不是听人转述视频。每次调用给出一张**可寻址的分镜图**（
 storyboard grid），为 `deepseek-v4.1-flash` 的视觉能力调优。可直接替换
@@ -103,18 +103,56 @@ video_read        整条视频读成带时间戳的文本 —— 讲课、幻灯
 插件**零运行时依赖**。需要 `ffmpeg`；有 `ffprobe` 时用它，没有就从 `ffmpeg -i`
 的输出里解析元数据。
 
+> ### ⚠️ 必须装 RapidOCR，否则 OCR 基本等于没用
+>
+> **这是最容易被跳过、而且跳过之后毫无提示的一步。** 没装 RapidOCR 时，工具会退回
+> `Windows.Media.Ocr`，照样返回「成功」——只是字全是错的。同一部中字番剧、同样的 8 帧实测：
+>
+> | 画面上的字 | Windows.Media.Ocr 读出 | RapidOCR 读出 |
+> | --- | --- | --- |
+> | `4K修复播放室` | `4K 修 复 播 放 室 LiliLi\i` | `4K修复播放室` |
+> | `bilibili` | `LiliLili` / `VliLi\i` / `LiIiLiIi` / `LiliLiIi`（8 帧读出 4 种错法） | `bilibili`，8 帧全对 |
+> | `迈克·庞德史密斯` | `迈 克 到 庞 德 史 密 斯` | `迈克·庞德史密斯` |
+> | 画面小字 | `0 噁 0 嶺` | `SAYA ELDER`、`BAR` |
+>
+> 而且 Windows OCR 会**在每两个汉字之间插一个空格**，下游任何子串匹配都会被它搞坏。
+> 所以：**不装 RapidOCR ⇒ 字幕和画面文字全是糊的**，模型读到的信息是错的。
+> 它不会报错，它只是安静地骗你。
+>
+> ```bash
+> # Windows
+> python -m venv E:\ocr-env
+> E:\ocr-env\Scripts\pip install rapidocr-onnxruntime
+> setx DSH_OCR_PYTHON E:\ocr-env\Scripts\python.exe
+>
+> # Linux / macOS
+> python3 -m venv ~/ocr-env
+> ~/ocr-env/bin/pip install rapidocr-onnxruntime
+> export DSH_OCR_PYTHON=~/ocr-env/bin/python
+> ```
+>
+> `DSH_OCR_PYTHON` 不是唯一入口：`src/ocr-python.js` 还会查 `vendor/ocr-env`、同级
+> `ocr-env`、`%LOCALAPPDATA%`、`%USERPROFILE%` 和 `<盘符>:\ocr-env`。
+> 但显式变量是 `bin/selfcheck.mjs` 唯一能验证的方式，而且**selfcheck 在用的是退化引擎时
+> 会直接报失败** —— 装完跑一次，它会告诉你实际拿到的是哪个引擎。
+>
+> > RapidOCR 要装在自己的 venv 里：它会把 numpy 升到 2.x，任何按 numpy 1.x 编译的
+> > `onnxruntime` 都会被搞坏（曾经让一个语音服务挂掉）。
+
 ```bash
-cd /path/to/dsh-video-vision
+cd /path/to/dsh-video-channel
 node bin/install.mjs            # 改 ~/.dsh/profiles/desktop，然后重启 DSH
 node bin/install.mjs --dry-run  # 只打印要改什么，不动文件
 node bin/install.mjs --remove   # 卸载
+node bin/selfcheck.mjs          # 体检：会顺带告诉你 OCR 用的是哪个引擎
 ```
 
 脚本手工做完了 `pnpm install` 本来会做的三件事：往 profile 的 `dependencies` 里写
-`"dsh-video-vision": "link:<绝对路径>"`、把包名加进 `dsh.profile.bundles`、把包
+`"dsh-video-channel": "link:<绝对路径>"`、把包名加进 `dsh.profile.bundles`、把包
 **目录联接（junction）**到 profile 的 `node_modules`。可重复执行；`--copy` 改成
 复制一份快照而不是链接。无论哪种方式，装完都要**重启应用**：包内的
-`cordis.patch.yml` 在启动时把插件插入 harness 树，三个工具才会出现。
+`cordis.patch.yml` 在启动时把插件插入 harness 树，六个工具才会出现
+（上游四个 + 本 fork 的 `video_scan` / `video_where`）。
 
 ### ffmpeg 查找顺序
 

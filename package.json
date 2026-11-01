@@ -46,8 +46,8 @@
     "node": ">=20"
   },
   "bin": {
-    "dsh-video-vision-install": "bin/install.mjs",
-    "dsh-video-vision-selfcheck": "bin/selfcheck.mjs"
+    "dsh-video-channel-install": "bin/install.mjs",
+    "dsh-video-channel-selfcheck": "bin/selfcheck.mjs"
   },
   "scripts": {
     "test": "node --test test/",

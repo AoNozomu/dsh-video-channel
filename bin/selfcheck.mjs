@@ -53,8 +53,32 @@ async function main() {
   if (args.has('--verbose')) console.log(toolchainReport());
 
   const plugin = await import('../src/index.js');
-  record(plugin.name === 'dsh-video-vision', 'plugin exports a name', plugin.name);
+  record(plugin.name === 'dsh-video-channel', 'plugin exports a name', plugin.name);
   record(Array.isArray(plugin.inject) && plugin.inject.includes('tools'), 'plugin injects tools', plugin.inject.join(','));
+
+  // ── OCR engine ──────────────────────────────────────────────────────────
+  // 2026-11-01: this check exists because the fallback is *silent*. Without a
+  // RapidOCR python, ocr.js quietly uses Windows.Media.Ocr, which reads CJK
+  // subtitles wrong without ever erroring — measured on 8 frames of one episode:
+  //   `bilibili`   -> LiliLili / VliLi\i / LiIiLiIi / LiliLiIi  (4 wrong variants)
+  //   `迈克·庞德史密斯` -> 迈 克 到 庞 德 史 密 斯
+  //   and it puts a space between every CJK character, which breaks substring
+  //   matching downstream.
+  // A user who never finds out will conclude the tool cannot read their video.
+  // So: rapidocr = ok; the Windows fallback = FAIL with the install line; nothing
+  // at all = FAIL. Deliberately not a `note()` — a note is how this gets skipped.
+  {
+    const { ocrBackend } = await import('../src/ocr.js');
+    const backend = ocrBackend();
+    if (backend.ok && backend.engine === 'rapidocr') {
+      record(true, 'OCR engine: RapidOCR', backend.bin);
+    } else if (backend.ok) {
+      record(false, 'OCR engine is the weak fallback', `got "${backend.engine}" — install RapidOCR: `
+        + 'python -m venv <dir> && <dir>/Scripts/pip install rapidocr-onnxruntime, then set DSH_OCR_PYTHON');
+    } else {
+      record(false, 'no OCR engine at all', backend.reason ?? 'unknown');
+    }
+  }
 
   const registered = [];
   const fake = {
@@ -63,7 +87,18 @@ async function main() {
     logger: { info() {}, warn() {}, error() {} },
   };
   await plugin.apply(fake);
-  record(registered.length === 4, 'four tools registered', registered.map((s) => s.name).join(', '));
+  // 2026-11-01: this asserted `=== 4` and had been failing ever since the fork
+  // added its own two tools (video_scan, video_where) — six are registered now.
+  // A stale count is worse than no check: it reports FAIL on a healthy install,
+  // which trains people to ignore the whole selfcheck. Assert the upstream four
+  // are still there *and* that the fork's two arrived, instead of a magic number.
+  const names = registered.map((s) => s.name);
+  const required = ['video_probe', 'video_storyboard', 'video_zoom', 'video_read'];
+  const forkOnly = ['video_scan', 'video_where'];
+  const missing = required.filter((n) => !names.includes(n));
+  const missingFork = forkOnly.filter((n) => !names.includes(n));
+  record(missing.length === 0, `the upstream four tools are registered`, missing.length ? `missing ${missing.join(', ')}` : names.join(', '));
+  record(missingFork.length === 0, `the two channel tools are registered`, missingFork.length ? `missing ${missingFork.join(', ')}` : forkOnly.join(', '));
   for (const spec of registered) {
     const okSchema = spec?.parameters?.type === 'object' && spec?.output?.schema;
     const okShape = typeof spec.execute === 'function' && typeof spec.output?.render === 'function';
