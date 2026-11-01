@@ -119,9 +119,18 @@ export async function apply(ctx) {
           '⚠ 认人别靠分镜图猜：先用 video_where 找到那一格，再用 video_zoom 看清脸。',
         ].join('\n');
 
+        // 2026-11-01 修：原来这里直接把 `sh.png`（encodePng 产出的 **Buffer**）塞进
+        // 返回值，host 校验时报 "value is not lossless JSON" —— Buffer 不是合法的
+        // JSON 值，整个 video_scan 调用直接失败（连台词都拿不到）。
+        // 上游 video_storyboard 一直是对的，因为它走了 attachImages → ctx.attachments.saveImage()，
+        // 拿回的是可序列化的引用。这里照同一套路走。
+        const images = picked.length
+          ? await attachImages(ctx, picked.map((sh) => ({ data: sh.png, name: sh.name })))
+          : [];
+
         return {
           text: [...head, transcript, indexBlock, warn, tail].join('\n'),
-          images: picked.map((sh) => ({ data: sh.png, mediaType: 'image/png', name: sh.name })),
+          images,
         };
       } catch (error) {
         return { text: `video error: ${String(error?.message ?? error)}`, images: [] };
