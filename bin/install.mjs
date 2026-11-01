@@ -23,7 +23,7 @@ import { existsSync, readFileSync, writeFileSync, copyFileSync, mkdirSync, rmSyn
 import { homedir, platform } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // 2026-11-01: 这里原来写的是上游的包名 'dsh-video-vision'（fork 改名时漏了）。
 // 后果很具体：装的时候会往 profile 的 dependencies / bundles 里写上游的名字，
@@ -186,6 +186,37 @@ if (!dryRun) {
 }
 
 log('');
-log('next: restart DeepSeek Harness. The four tools appear as');
-log('  video_probe · video_storyboard · video_zoom · video_read');
+log('next: restart DeepSeek Harness. The six tools appear as');
+log('  video_probe · video_storyboard · video_zoom · video_read   (upstream)');
+log('  video_scan  · video_where                                 (this fork)');
+
+// 2026-11-01: 把 OCR 状态直接打在安装输出里。
+// 为什么：没装 RapidOCR 时 ocr.js 会**安静地**退回 Windows.Media.Ocr，
+// 结果照样返回"成功"，只是字全错（实测 `bilibili` 8 帧读出 4 种错法、
+// 每两个汉字之间插一个空格）。装的人不一定会去跑 selfcheck，
+// 所以这一行必须出现在他自己会看到的地方。
+if (!flag('remove')) {
+  try {
+    const { ocrBackend } = await import(pathToFileURL(join(PLUGIN_DIR, 'src', 'ocr.js')).href);
+    const backend = ocrBackend();
+    if (backend.ok && backend.engine === 'rapidocr') {
+      log(`OCR: RapidOCR (${backend.bin})`);
+    } else if (backend.ok) {
+      log('');
+      log(`!! OCR is using "${backend.engine}" — the weak fallback.`);
+      log('   Subtitles and on-screen text will come back garbled, without any error.');
+      log('   Install RapidOCR:');
+      log('     python -m venv <dir>');
+      log('     <dir>/Scripts/pip install rapidocr-onnxruntime     # POSIX: <dir>/bin/pip');
+      log('     setx DSH_OCR_PYTHON <dir>/Scripts/python.exe       # POSIX: export ...');
+    } else {
+      log('');
+      log(`!! no OCR engine: ${backend.reason ?? 'unknown'}`);
+      log('   Install RapidOCR (see the README) or the tools cannot read any text.');
+    }
+  } catch (error) {
+    log(`OCR: could not check (${String(error?.message ?? error).slice(0, 120)})`);
+  }
+}
+
 log(`verify with: node "${join(PLUGIN_DIR, 'bin', 'selfcheck.mjs')}"`);
