@@ -22,12 +22,20 @@ import { extractFrame } from './frames.js';
 import { composeSheet } from './sheet.js';
 import { encodePng } from './png.js';
 import { run, parseFfmpegBanner } from './media.js';
+import { isBilibili, bilibiliFile } from './bili.js';
+import { findRapidPython } from './ocr-python.js';
 
 const HOME = process.env.DSH_HOME || path.join(os.homedir(), '.dsh');
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
-/** OCR 用的 python：由调用方传，或环境变量 DSH_OCR_PYTHON */
-export const DEFAULT_OCR_PYTHON = process.env.DSH_OCR_PYTHON || '';
+/** OCR 用的 python：由调用方传，否则环境变量，再否则**探测**。
+ *
+ * 2026-11-01 修：原来只有 `process.env.DSH_OCR_PYTHON || ''` —— 没设这个变量时
+ * DEFAULT 是空串，`fs.existsSync('')` 为 false，于是台词 OCR 被整段跳过，
+ * 日志只说“没有可用的 OCR python”，**明明机器上装着 RapidOCR**。
+ * 而 src/ocr.js（video_read / storyboard 用的）一直有探测，所以那些工具正常、
+ * 只有 video_scan 抽不到台词。现在两边共用 findRapidPython()。 */
+export const DEFAULT_OCR_PYTHON = process.env.DSH_OCR_PYTHON || findRapidPython() || '';
 
 export const LONGFORM_DEFAULTS = {
   start: 0,
@@ -163,7 +171,34 @@ export async function runLongform(p = {}) {
   if (!opt.ffmpegPath) throw new Error('ffmpeg not found');
   const log = typeof opt.log === 'function' ? opt.log : () => {};
 
-  const duration = opt.end != null ? Number(opt.end) : await probeDuration(opt.input, opt.ffmpegPath);
+  // 2026-11-01 修（**「镜头全丢」的根因**）：这里以前把 opt.input **原样**交给 ffmpeg。
+  // 传本地文件没问题；传 B站 链接就是灾难 —— ffmpeg 读的是媒体流，不是网页：
+  //   `https://www.bilibili.com/video/BV...?p=1: Invalid data found when processing input`
+  // 每一帧都失败 → `!frame.data` → 全被当成「重复」丢掉 → `保留 0 格、0 张分镜`，
+  // 而日志只说“丢弃 120 重复”，**把失败伪装成画面没变化**。
+  // video_read / video_storyboard 一直是对的，因为它们先走 resolveSource()。
+  // 这里补上同一步：B站 链接先解析+下载成本地文件，再对本地文件抽帧。
+  let source = opt.input;
+  if (isBilibili(source)) {
+    log('B站 链接 → 先解析并缓存成本地文件…');
+    const got = await bilibiliFile(source, {
+      ffmpegPath: opt.ffmpegPath,
+      signal: opt.signal,
+      log,
+      maxHeight: (() => { const n = Number(process.env.DSH_BILIBILI_MAX_HEIGHT); return Number.isFinite(n) && n >= 144 ? Math.floor(n) : 1080; })(),
+    });
+    // ⚠️ bilibiliFile 返回的是 { path, meta, quality, label, bytes, cached, subtitle }，
+    // **不是路径字符串**。第一版我直接把整个对象赋给 source，ffmpeg 收到 "[object Object]"，
+    // 报 `No such file or directory` —— 白跑一轮。要取 .path。
+    source = got?.path;
+    if (!source) throw new Error('B站 解析没拿到本地文件路径');
+    if (got.meta?.title) {
+      log(`《${got.meta.title}》${got.meta.partTitle ? ` P${got.meta.page} ${got.meta.partTitle}` : ''}`);
+    }
+    log(`已就绪：${source}${got.cached ? '（缓存命中）' : ''}`);
+  }
+
+  const duration = opt.end != null ? Number(opt.end) : await probeDuration(source, opt.ffmpegPath);
   const start = Math.max(0, Number(opt.start) || 0);
   const step = Math.max(0.2, Number(opt.step) || 1);
   const outDir = opt.outDir || path.join(HOME, 'cache', 'video-vision', 'longform', `scan-${Date.now()}`);
@@ -197,7 +232,7 @@ export async function runLongform(p = {}) {
     const res = await run(opt.ffmpegPath, [
       '-hide_banner', '-nostdin', '-v', 'error',
       '-ss', String(start), '-t', String(Math.max(0.5, duration - start)),
-      '-i', opt.input,
+      '-i', source,
       '-vf', `fps=${fps},scale=${ocrW}:${ocrH}`,
       '-q:v', '2', '-y', tpl,
     ], { timeoutMs: 1_800_000, signal: opt.signal });
@@ -238,15 +273,23 @@ export async function runLongform(p = {}) {
   const kept = [];
   let lastKept = null;
   let dropped = 0;
+  const frameFailures = [];   // 抽帧失败的真实原因（不是「重复」）
   const rawLines = [];
 
   for (let i = 0; i < times.length; i++) {
     if (opt.signal?.aborted) throw new Error('scan aborted');
     const t = times[i];
     const frame = await extractFrame({
-      input: opt.input, ffmpegPath: opt.ffmpegPath, t, width: cellW, height: cellH,
+      input: source, ffmpegPath: opt.ffmpegPath, t, width: cellW, height: cellH,
     });
-    if (!frame.data) { dropped += 1; continue; }
+    if (!frame.data) {
+      // 2026-11-01：以前这里是 `if (!frame.data) { dropped += 1; continue; }` ——
+      // 抽帧失败被算进「重复」里，日志只说“丢弃 N 重复”，**把失败伪装成画面没变化**。
+      // B站 链接没解析就喂给 ffmpeg 时，120 帧全走这条，外界只看到“保留 0 格”。
+      frameFailures.push(`t=${t}s code=${frame.code ?? '?'} ${String(frame.stderr ?? '').slice(-160)}`);
+      dropped += 1;
+      continue;
+    }
 
     if (opt.subtitle && frameFiles.length) {
       const name = `f${String(i + 1).padStart(5, '0')}.png`;
@@ -263,7 +306,13 @@ export async function runLongform(p = {}) {
       dropped += 1;
     }
   }
-  log(`画面：抽 ${times.length} 帧 → 保留 ${kept.length}、丢弃 ${dropped} 重复`);
+  if (frameFailures.length) {
+    // 一律报出来：这是「什么都没拿到」的真正原因，不能安静地混进“重复”里
+    log(`画面：抽 ${times.length} 帧 → 保留 ${kept.length}、丢弃 ${dropped}（其中 **${frameFailures.length} 帧根本没抽到画面**）`);
+    log(`  抽帧失败样例：${frameFailures.slice(0, 3).join(' | ')}`);
+  } else {
+    log(`画面：抽 ${times.length} 帧 → 保留 ${kept.length}、丢弃 ${dropped} 重复`);
+  }
 
   // ── 4. 台词合并
   const subtitles = mergeSubtitleLines(rawLines);
@@ -302,7 +351,7 @@ export async function runLongform(p = {}) {
 
   const indexFile = path.join(outDir, 'index.json');
   await fsp.writeFile(indexFile, JSON.stringify({
-    input: opt.input, start, end: duration, step, perSheet: per, cellW, cellH,
+    input: source, start, end: duration, step, perSheet: per, cellW, cellH,
     totalFrames: times.length, keptFrames: kept.length, droppedFrames: dropped,
     sheets: sheets.map(({ png, ...rest }) => rest),
     subtitles: subtitleFile,
