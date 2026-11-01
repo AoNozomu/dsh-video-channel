@@ -196,6 +196,48 @@ export function readableScreen(lines) {
   return total >= 24;
 }
 
+/**
+ * Is this frame carrying a burned-in subtitle?
+ *
+ * Why a separate rule instead of loosening `readableScreen` (2026-11-01):
+ * a subtitle is 4~12 characters — the same size as a fragment of handwriting,
+ * so length alone can never tell them apart. **Position can.**
+ *
+ * (Tried the loose-threshold route first; test/read.test.mjs instantly caught
+ * the counter-example `亿天小釒一 0 立去千凸到` — 10 CJK characters of OCR noise —
+ * being accepted. Length cannot separate them. Position can.)
+ *
+ * A subtitle band is: one to three lines hugging the bottom quarter of the
+ * frame, carrying most of what the frame says. Measured on BV1MMnw6MEtU p1
+ * 150-210 s: keeps 7 real lines that readableScreen throws away
+ * ("这三十秒回不来了" 8 chars, "抱歉 老大" 4, "哪个是我们的" 6) while still
+ * rejecting handwriting, because a page of scribbles fills the middle of the
+ * frame instead of one thin strip at the bottom.
+ *
+ * @param {{lines?: Array<{text: string, y0: number, y1: number}>, height?: number}} rec
+ * @returns {boolean}
+ */
+export function subtitleBand(rec) {
+  const all = rec?.lines ?? [];
+  const H = Number(rec?.height) || 0;
+  if (!all.length || !H) return false;
+  // a subtitle sits in the last quarter; allow slack because some releases put
+  // it at 0.78 and some at 0.92
+  const CUT = 0.74;
+  const inBand = all.filter((l) => l && Number.isFinite(l.y0) && l.y0 / H >= CUT);
+  if (!inBand.length) return false;
+  // one to three lines: a wall of text at the bottom is a slide, not a subtitle
+  if (inBand.length > 3) return false;
+  const chars = inBand.reduce((a, l) => a + wordChars(String(l.text ?? '')), 0);
+  // too short = picture noise; too long = a crammed slide
+  if (chars < 2 || chars > 40) return false;
+  // most of what this frame says has to BE the subtitle, otherwise it is a
+  // full-text slide that happens to extend to the bottom
+  const everything = all.reduce((a, l) => a + wordChars(String(l.text ?? '')), 0);
+  if (everything > 0 && chars / everything < 0.5) return false;
+  return true;
+}
+
 /** the shape a line has to keep to count as "the same line" across screens */
 function lineKey(text) {
   return text.replace(/[^\p{Script=Han}\p{L}\p{N}]/gu, '').slice(0, 24);
@@ -442,14 +484,26 @@ export async function runRead(opts) {
   const wall = Date.now();
 
   const t0 = Date.now();
-  // a short clip changes faster than its keyframes do, so sample on the clock
+  // 2026-11-01 修（**「前 10 分钟一条字幕都抽不到」的一半原因**）：
+  //   原来是 `if (!end)` —— 只要调用方传了 end，就**永远不密集采样**，直接 `-skip_frame nokey`。
+  //   实测同一部番 BV1MMnw6MEtU p1 前 300 秒：
+  //     · 关键帧模式 = 63 帧，平均 **4.8 秒**才一张
+  //     · 密集采样   = 251 帧，1.2 秒一张
+  //   字幕只停 1~3 秒 → 4.8 秒抽一张等于**大半字幕都被跳过**，OCR 再准也没东西可认。
+  //   而且 index.js 传的是 `end: args.end ?? 0`，`0` 也是 falsy —— 这条"不传 end"的路几乎走不到。
+  //   传不传 end 不该影响采样密度，该看的是**这段窗口多长**。
   let dense = 0;
-  if (!end) {
-    try {
-      const meta = await probeVideo(source, { ffmpegPath });
-      const span = (meta.duration || 0) - start;
-      if (span > 1 && span <= READ_DEFAULTS.denseUnder) dense = READ_DEFAULTS.denseSeconds;
-    } catch { /* no duration: fall back to keyframes */ }
+  {
+    let span = 0;
+    if (end) {
+      span = end - start;
+    } else {
+      try {
+        const meta = await probeVideo(source, { ffmpegPath });
+        span = (meta.duration || 0) - start;
+      } catch { /* 没有时长信息：退回关键帧 */ }
+    }
+    if (span > 1 && span <= READ_DEFAULTS.denseUnder) dense = READ_DEFAULTS.denseSeconds;
   }
   const { grids, stamps } = await decodeKeyframes(ffmpegPath, source, { start, end, signal, dense });
   timings.scan = Date.now() - t0;
@@ -499,9 +553,12 @@ export async function runRead(opts) {
 
     const raw = [];
     for (const i of picked) {
-      const lines = screenLines(recognised.get(names.get(i)));
+      const rec = recognised.get(names.get(i));
+      const lines = screenLines(rec);
       if (!lines.length) continue;
-      raw.push({ t: start + (stamps[i] ?? 0), lines });
+      // 2026-11-01：记下这一帧是不是字幕（贴在底部一条），
+      // 后面 readableScreen 判不过的，靠它再给字幕一次机会。
+      raw.push({ t: start + (stamps[i] ?? 0), lines, sub: subtitleBand(rec) });
     }
     raw.sort((a, b) => a.t - b.t);
     const cleaned = dropBoilerplate(raw);
@@ -512,7 +569,9 @@ export async function runRead(opts) {
       // A handwritten page reaches OCR as a handful of fragments. A page that
       // still yields a heading or an example number is worth its few tokens;
       // a frame of loose strokes is not. The header says when little was found.
-      if (!readableScreen(s.lines)) continue;
+      // 2026-11-01：字幕单独放行。字幕 4~12 字，和涂鸦碎片一样短，字数永远分不开；
+      // 能分开的是**位置** —— 它贴在画面最下面一条，而涂鸦铺满中间。见 subtitleBand()。
+      if (!readableScreen(s.lines) && !s.sub) continue;
       screens.push({ t: s.t, text });
     }
     const merged = mergeScreens(screens);
