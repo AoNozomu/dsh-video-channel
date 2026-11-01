@@ -1,6 +1,20 @@
 # dsh-video-channel — insert this plugin into the harness tree.
 # Same shape as every other bundle patch: one insert entry whose `name` is
 # resolved from the profile's node_modules.
+#
+# ⚠️ 2026-11-01：`id` 故意写成 `dsh-video-vision`（旧名），`name` 才是真包名。
+#
+# 为什么：DSH 恢复一个会话时，要把它当初用的插件组重新挂上，认的是 `id`。
+# QQ 那两个会话（private:42630757 / group:1132408246）是在还叫 `dsh-video-vision`
+# 的时候建的，会话里记着这个组名。换成本仓库的包名之后，恢复就报：
+#
+#   RemoteError: tool-video-vision (dsh-video-vision): never started
+#
+# 结果是那两个会话**一条消息都发不出去**（唤醒投递被拒）。
+#
+# 代价说清楚：`id` 和 `name` 不一致，看起来别扭，而且新会话也会继承这个旧 id。
+# 但 `id` 只是一个挂载点的名字，`name` 决定跑哪份代码 —— 改成 channel 之后，
+# 老会话恢复时挂上的就是本仓库的代码。**用别人的旧名字，换自己能用**，这笔划算。
 - insert:
-    - id: dsh-video-channel
+    - id: dsh-video-vision
       name: dsh-video-channel
