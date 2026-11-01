@@ -105,6 +105,20 @@ video_where({ dir: outDir, grep: "your daughter" })
 video_zoom({ input: "/path/to/ep01.mp4", start: 242, end: 245, cells: 1 })
 ```
 
+`input` takes a local file **or a Bilibili link** — a full `https://www.bilibili.com/video/BV...`
+URL (with or without `?p=`), a bare `BV...` id, an `av` number, or a `b23.tv` short link.
+The link is resolved and downloaded once into `~/.dsh/cache/video-vision/bilibili/<BV>/`,
+and every frame is then read from that local copy, so scanning a second window of the same
+episode costs nothing extra:
+
+```js
+video_scan({ input: "https://www.bilibili.com/video/BV1MMnw6MEtU?p=1", start: 150, end: 180 })
+```
+
+Note that a page URL is *not* handed to ffmpeg — ffmpeg reads media streams, not HTML. The
+resolution step happens first, and the tool says which file it settled on ("已就绪: ..."),
+so you can tell a cached run from a fresh download.
+
 **Read the transcript first; look at sheets only for what words cannot show.**
 One episode costs ≈11K tokens this way (~0.01 USD). Reading all 45 sheets costs ~45K and still
 tells you nothing about the dialogue.
